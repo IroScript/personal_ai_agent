@@ -1,0 +1,49 @@
+name: AI Productivity Agent
+
+on:
+  schedule:
+    # Run 4 times a day (UTC time - adjust for your timezone)
+    # 3:30 AM UTC = 9:00 AM Bangladesh (UTC+5:30)
+    - cron: '30 3 * * *'   # Morning - 9:00 AM
+    - cron: '30 8 * * *'   # Afternoon - 2:00 PM
+    - cron: '30 12 * * *'  # Evening - 6:00 PM
+    - cron: '30 16 * * *'  # Night - 10:00 PM
+  
+  workflow_dispatch:  # Manual trigger করতে পারবে
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+    
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: 📦 Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client requests
+    
+    - name: 🔧 Create config.json from secrets
+      run: |
+        echo '${{ secrets.CONFIG_JSON }}' > config.json
+    
+    - name: 🤖 Run AI Productivity Agent
+      run: |
+        python ai_agent.py --mode notify
+      env:
+        PYTHONIOENCODING: utf-8
+    
+    - name: ✅ Job completed
+      if: success()
+      run: echo "AI Agent ran successfully at $(date)"
+    
+    - name: ❌ Job failed
+      if: failure()
+      run: echo "AI Agent failed at $(date)"

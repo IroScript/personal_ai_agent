@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-AI Productivity Agent
-Google Sheets + Ollama Gemma + Telegram Integration
-একটা single file এ সম্পূর্ণ system
+AI Productivity Agent - Main Script
+Google Sheets + Multiple AI Providers (Groq, Gemini, OpenAI, Anthropic, Local) + Telegram
+Fallback chain: Groq → Gemini → OpenAI → Anthropic → Local Ollama
 """
 
 import os
@@ -21,7 +21,6 @@ from googleapiclient.errors import HttpError
 # CONFIGURATION
 # ============================================================================
 
-# Load configuration from config.json
 def load_config():
     """config.json থেকে সব settings load করে"""
     try:
@@ -35,42 +34,35 @@ def load_config():
         print("❌ config.json file ঠিকমতো parse করতে পারিনি!")
         return None
 
-# Load config
 CONFIG = load_config()
 
 if CONFIG:
-    # Google Sheets credential - config.json এর ভিতর থেকেই নিব
     CREDENTIAL_DATA = CONFIG['google_sheets']['credentials']
     SPREADSHEET_ID = CONFIG['google_sheets']['spreadsheet_id']
     PLANNING_SHEET = CONFIG['google_sheets']['sheets']['planning']
     TASKLIST_SHEET = CONFIG['google_sheets']['sheets']['tasklist']
     TELEGRAM_IDS_SHEET = CONFIG['google_sheets']['sheets']['telegram_ids']
-    OLLAMA_MODEL = CONFIG['ai_model']['name']
+    
+    # AI Provider settings
+    AI_PROVIDERS = CONFIG['ai_model']['online']
+    LOCAL_MODEL = CONFIG['ai_model']['local']
+    
     TELEGRAM_BOT_TOKEN = CONFIG['telegram']['bot_token']
     TELEGRAM_CHAT_IDS = CONFIG['telegram']['chat_ids']
 else:
-    print("⚠️ Config load করতে পারিনি! Default values ব্যবহার করছি...")
-    CREDENTIAL_DATA = None
-    SPREADSHEET_ID = ""
-    PLANNING_SHEET = "TASKS_PLAN"
-    TASKLIST_SHEET = "TASKLIST"
-    TELEGRAM_IDS_SHEET = "telegram IDs"
-    OLLAMA_MODEL = "gemma3:1b"
-    TELEGRAM_BOT_TOKEN = ""
-    TELEGRAM_CHAT_IDS = []
+    print("⚠️ Config load করতে পারিনি!")
+    sys.exit(1)
 
-# Google Sheets API scopes
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 
 # ============================================================================
-# GOOGLE SHEETS FUNCTIONS
+# GOOGLE SHEETS FUNCTIONS (Same as local version)
 # ============================================================================
 
 def get_google_sheets_service():
     """Google Sheets API service create করে"""
     try:
-        # Credential data config.json থেকে সরাসরি নিই
         if CREDENTIAL_DATA:
             creds = Credentials.from_service_account_info(
                 CREDENTIAL_DATA,
@@ -104,29 +96,18 @@ def read_sheet_data(service, spreadsheet_id, sheet_name):
 
 
 # ============================================================================
-# DATA PARSING FUNCTIONS
+# DATA PARSING FUNCTIONS (Same as local version)
 # ============================================================================
 
 def parse_planning_data(data):
-    """TASKS_PLAN sheet থেকে আজকের task list বের করে
-    
-    Expected columns:
-    A: Sl
-    B: Planning (task name)
-    C: Tag
-    D: Target Time in Minute
-    E: Frequency (Daily/Weekly)
-    F: Description
-    G: Frequency (Today/Weekly indicator)
-    """
+    """TASKS_PLAN sheet থেকে আজকের task list বের করে"""
     tasks = []
     
     if not data or len(data) < 2:
         return tasks
     
-    # Skip header (row 1)
     for row in data[1:]:
-        if len(row) < 4:  # At least need columns A-D
+        if len(row) < 4:
             continue
         
         try:
@@ -140,9 +121,8 @@ def parse_planning_data(data):
                 'when': row[6] if len(row) > 6 else ''
             }
             
-            # Filter: শুধু "Today" tasks নেব
             if task['when'] and 'today' in str(task['when']).lower():
-                if task['name']:  # Only add if task has a name
+                if task['name']:
                     tasks.append(task)
         except Exception as e:
             continue
@@ -151,47 +131,31 @@ def parse_planning_data(data):
 
 
 def parse_tasklist_data(data):
-    """TASKLIST sheet থেকে আজকের actual time log বের করে
-    
-    Actual structure from your sheet:
-    A: Sl number (1, 2, 3)
-    B: Empty or number
-    C: Date (তারিখ - 1, 2, 3...)
-    D: Task name with tag (e.g., "Sleeping (Sleep)", "With Iroan (Family Time)")
-    E: Time info or duration
-    """
+    """TASKLIST sheet থেকে আজকের actual time log বের করে"""
     logs = []
     
     if not data or len(data) < 2:
         return logs
     
-    # প্রথমে Jun' 2026 section খুঁজি
-    current_month = None
-    in_current_month = False
-    
     for row_idx, row in enumerate(data):
-        # Month header খুঁজি
         if len(row) > 0 and isinstance(row[0], str):
             if "jun" in str(row[0]).lower() and "2026" in str(row[0]).lower():
                 in_current_month = True
-                current_month = row[0]
                 continue
         
-        # Parse করি - Column D তে task name থাকে
         if len(row) >= 4:
-            task_name = row[3] if len(row) > 3 else ''  # Column D
+            task_name = row[3] if len(row) > 3 else ''
             
             if task_name and task_name.strip() and len(task_name) > 3:
                 try:
                     log = {
                         'sl': row[0] if len(row) > 0 else '',
-                        'date': row[2] if len(row) > 2 else '',  # Column C - date
-                        'task': task_name,  # Column D - task name
-                        'time_or_duration': row[4] if len(row) > 4 else '',  # Column E
+                        'date': row[2] if len(row) > 2 else '',
+                        'task': task_name,
+                        'time_or_duration': row[4] if len(row) > 4 else '',
                         'extra_info': row[5] if len(row) > 5 else ''
                     }
                     
-                    # Extract tag from task name (text in parentheses)
                     if '(' in task_name and ')' in task_name:
                         tag = task_name[task_name.find('(')+1:task_name.find(')')]
                         log['tag'] = tag
@@ -206,7 +170,248 @@ def parse_tasklist_data(data):
 
 
 # ============================================================================
-# AI ANALYSIS FUNCTIONS
+# MULTI-PROVIDER AI FUNCTIONS
+# ============================================================================
+
+def call_groq_api(prompt, api_key, model):
+    """Groq API call করে"""
+    try:
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": "তুমি একজন strict productivity coach। সংক্ষেপে বাংলায় উত্তর দাও।"},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 500
+        }
+        
+        response = requests.post(url, headers=headers, json=data, timeout=30)
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result['choices'][0]['message']['content']
+        else:
+            print(f"⚠️ Groq API error: {response.status_code}")
+            return None
+    
+    except Exception as e:
+        print(f"⚠️ Groq API call failed: {e}")
+        return None
+
+
+def call_gemini_api(prompt, api_key, model):
+    """Google Gemini API call করে"""
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        
+        headers = {"Content-Type": "application/json"}
+        
+        data = {
+            "contents": [{
+                "parts": [{
+                    "text": f"তুমি একজন strict productivity coach। সংক্ষেপে বাংলায় উত্তর দাও।\n\n{prompt}"
+                }]
+            }]
+        }
+        
+        response = requests.post(url, headers=headers, json=data, timeout=30)
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result['candidates'][0]['content']['parts'][0]['text']
+        else:
+            print(f"⚠️ Gemini API error: {response.status_code}")
+            return None
+    
+    except Exception as e:
+        print(f"⚠️ Gemini API call failed: {e}")
+        return None
+
+
+def call_openai_api(prompt, api_key, model):
+    """OpenAI API call করে"""
+    try:
+        url = "https://api.openai.com/v1/chat/completions"
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": "তুমি একজন strict productivity coach। সংক্ষেপে বাংলায় উত্তর দাও।"},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 500
+        }
+        
+        response = requests.post(url, headers=headers, json=data, timeout=30)
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result['choices'][0]['message']['content']
+        else:
+            print(f"⚠️ OpenAI API error: {response.status_code}")
+            return None
+    
+    except Exception as e:
+        print(f"⚠️ OpenAI API call failed: {e}")
+        return None
+
+
+def call_anthropic_api(prompt, api_key, model):
+    """Anthropic Claude API call করে"""
+    try:
+        url = "https://api.anthropic.com/v1/messages"
+        
+        headers = {
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "model": model,
+            "max_tokens": 500,
+            "messages": [
+                {"role": "user", "content": f"তুমি একজন strict productivity coach। সংক্ষেপে বাংলায় উত্তর দাও।\n\n{prompt}"}
+            ]
+        }
+        
+        response = requests.post(url, headers=headers, json=data, timeout=30)
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result['content'][0]['text']
+        else:
+            print(f"⚠️ Anthropic API error: {response.status_code}")
+            return None
+    
+    except Exception as e:
+        print(f"⚠️ Anthropic API call failed: {e}")
+        return None
+
+
+def call_local_ollama(prompt, model):
+    """Local Ollama model call করে"""
+    try:
+        result = subprocess.run(
+            ['ollama', 'run', model, prompt],
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            timeout=60,
+            stdin=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+        )
+        
+        if result.returncode == 0:
+            response = result.stdout.strip()
+            if ">>>" in response:
+                response = response.split(">>>")[0].strip()
+            return response
+        else:
+            print(f"⚠️ Ollama error: {result.stderr}")
+            return None
+    
+    except Exception as e:
+        print(f"⚠️ Ollama call failed: {e}")
+        return None
+
+
+def get_ai_advice(report):
+    """Multiple AI providers থেকে fallback chain দিয়ে advice নেয়
+    
+    Priority: Groq → Gemini → OpenAI → Anthropic → Local Ollama
+    """
+    
+    prompt = f"""তুমি একজন strict productivity coach। নিচের report দেখে user কে একটা ছোট motivational বা strict message দাও (maximum 3-4 লাইন, বাংলায়):
+
+{report}
+
+Message:"""
+    
+    providers_tried = []
+    
+    # 1. Try Groq first
+    if AI_PROVIDERS['groq']['enabled'] and AI_PROVIDERS['groq']['api_key']:
+        print("🔹 Trying Groq API...")
+        providers_tried.append("Groq")
+        response = call_groq_api(
+            prompt,
+            AI_PROVIDERS['groq']['api_key'],
+            AI_PROVIDERS['groq']['model']
+        )
+        if response:
+            print(f"✅ Got response from Groq!")
+            return response, "Groq"
+    
+    # 2. Try Gemini
+    if AI_PROVIDERS['gemini']['enabled'] and AI_PROVIDERS['gemini']['api_key']:
+        print("🔹 Trying Gemini API...")
+        providers_tried.append("Gemini")
+        response = call_gemini_api(
+            prompt,
+            AI_PROVIDERS['gemini']['api_key'],
+            AI_PROVIDERS['gemini']['model']
+        )
+        if response:
+            print(f"✅ Got response from Gemini!")
+            return response, "Gemini"
+    
+    # 3. Try OpenAI
+    if AI_PROVIDERS['openai']['enabled'] and AI_PROVIDERS['openai']['api_key']:
+        print("🔹 Trying OpenAI API...")
+        providers_tried.append("OpenAI")
+        response = call_openai_api(
+            prompt,
+            AI_PROVIDERS['openai']['api_key'],
+            AI_PROVIDERS['openai']['model']
+        )
+        if response:
+            print(f"✅ Got response from OpenAI!")
+            return response, "OpenAI"
+    
+    # 4. Try Anthropic
+    if AI_PROVIDERS['anthropic']['enabled'] and AI_PROVIDERS['anthropic']['api_key']:
+        print("🔹 Trying Anthropic API...")
+        providers_tried.append("Anthropic")
+        response = call_anthropic_api(
+            prompt,
+            AI_PROVIDERS['anthropic']['api_key'],
+            AI_PROVIDERS['anthropic']['model']
+        )
+        if response:
+            print(f"✅ Got response from Anthropic!")
+            return response, "Anthropic"
+    
+    # 5. Fallback to Local Ollama
+    print("🔹 Trying Local Ollama...")
+    providers_tried.append("Local Ollama")
+    response = call_local_ollama(prompt, LOCAL_MODEL['model_name'])
+    if response:
+        print(f"✅ Got response from Local Ollama!")
+        return response, "Local Ollama"
+    
+    # If all failed
+    print(f"❌ All providers failed. Tried: {', '.join(providers_tried)}")
+    return "Keep working hard! তোমার productivity improve করতে হবে! 💪", "Fallback"
+
+
+# ============================================================================
+# ANALYSIS FUNCTIONS (Same as local)
 # ============================================================================
 
 def analyze_productivity(planning_tasks, actual_logs):
@@ -221,7 +426,6 @@ def analyze_productivity(planning_tasks, actual_logs):
         'time_wasted_activities': []
     }
     
-    # Tag-wise activity count
     tag_counter = Counter()
     
     for log in actual_logs:
@@ -229,16 +433,13 @@ def analyze_productivity(planning_tasks, actual_logs):
         if tag:
             tag_counter[tag] += 1
             
-            # Sleep detection
             if 'sleep' in tag.lower():
                 analysis['sleep_activities'].append(log)
             
-            # Productive tags
             productive_tags = ['ERP', 'Business', 'Coding', 'Learning', 'Reading', 'Work']
             if any(pt.lower() in tag.lower() for pt in productive_tags):
                 analysis['productive_activities'].append(log)
             
-            # Time wasted tags
             waste_tags = ['Social Media', 'Gossip', 'Random', 'Facebook']
             if any(wt.lower() in tag.lower() for wt in waste_tags):
                 analysis['time_wasted_activities'].append(log)
@@ -272,7 +473,6 @@ def generate_ai_report(planning_tasks, actual_logs, analysis):
 
 """
     
-    # Judgment
     if len(analysis['sleep_activities']) > 5:
         report += "⚠️ **বেশি ঘুমাচ্ছো! কাজে মন দাও!**\n"
     
@@ -285,7 +485,7 @@ def generate_ai_report(planning_tasks, actual_logs, analysis):
 
 
 # ============================================================================
-# TELEGRAM FUNCTIONS
+# TELEGRAM FUNCTIONS (Same as local)
 # ============================================================================
 
 def send_telegram_message(bot_token, chat_id, message):
@@ -339,192 +539,62 @@ def read_telegram_ids_from_sheet(service, spreadsheet_id):
 
 
 # ============================================================================
-# MAIN TEST FUNCTION
-# ============================================================================
-
-def test_sheet_reading():
-    """Google Sheet থেকে data read করে parse করে দেখায়"""
-    
-    print("="*70)
-    print("🧪 AI PRODUCTIVITY AGENT - Data Reading Test")
-    print("="*70)
-    
-    # Check config loaded
-    if not CONFIG:
-        print(f"\n❌ Config file load করতে পারিনি!")
-        return False
-    
-    print(f"✅ Config loaded from config.json\n")
-    
-    # Connect to Google Sheets
-    print("🔌 Google Sheets এ connect করছি...")
-    service = get_google_sheets_service()
-    
-    if not service:
-        return False
-    
-    print("✅ Connection successful!\n")
-    
-    # ========================================
-    # 1. Read TASKS_PLAN Sheet
-    # ========================================
-    print("="*70)
-    print("📋 STEP 1: Reading TASKS_PLAN (Planning Sheet)")
-    print("="*70)
-    
-    planning_data = read_sheet_data(service, SPREADSHEET_ID, PLANNING_SHEET)
-    
-    if not planning_data:
-        print(f"❌ '{PLANNING_SHEET}' sheet পড়তে পারিনি!")
-        return False
-    
-    print(f"✅ Total {len(planning_data)} rows in planning sheet")
-    
-    # Parse planning data
-    today_tasks = parse_planning_data(planning_data)
-    
-    print(f"\n📌 আজকের জন্য {len(today_tasks)} টি task পাওয়া গেছে:\n")
-    print("-" * 70)
-    
-    for i, task in enumerate(today_tasks[:10], 1):
-        print(f"{i}. {task['name']}")
-        print(f"   Tag: {task['tag']}")
-        print(f"   Target: {task['target_time']}")
-        print(f"   Frequency: {task['frequency']}")
-        print()
-    
-    if len(today_tasks) > 10:
-        print(f"... আরও {len(today_tasks) - 10} টি task আছে\n")
-    
-    # ========================================
-    # 2. Read TASKLIST Sheet
-    # ========================================
-    print("="*70)
-    print("📊 STEP 2: Reading TASKLIST (Actual Time Tracking)")
-    print("="*70)
-    
-    tasklist_data = read_sheet_data(service, SPREADSHEET_ID, TASKLIST_SHEET)
-    
-    if not tasklist_data:
-        print(f"❌ '{TASKLIST_SHEET}' sheet পড়তে পারিনি!")
-        return False
-    
-    print(f"✅ Total {len(tasklist_data)} rows in tasklist sheet")
-    
-    # Parse tasklist data
-    actual_logs = parse_tasklist_data(tasklist_data)
-    
-    print(f"\n📝 মোট {len(actual_logs)} টি activity log পাওয়া গেছে")
-    print(f"\nপ্রথম ১০টি log:\n")
-    print("-" * 70)
-    
-    for i, log in enumerate(actual_logs[:10], 1):
-        print(f"{i}. {log['task']}")
-        print(f"   Date: {log['date']} | Tag: {log.get('tag', 'N/A')} | Duration: {log['time_or_duration']}")
-    
-    if len(actual_logs) > 10:
-        print(f"\n... আরও {len(actual_logs) - 10} টি log entry আছে\n")
-    
-    # ========================================
-    # 3. Summary
-    # ========================================
-    print("="*70)
-    print("📊 SUMMARY")
-    print("="*70)
-    
-    print(f"""
-✅ Data Reading Successful!
-
-Planning Sheet:
-   • Total rows: {len(planning_data)}
-   • Today's tasks: {len(today_tasks)}
-
-Tasklist Sheet:
-   • Total rows: {len(tasklist_data)}
-   • Activity logs: {len(actual_logs)}
-
-🎯 Next Steps:
-   1. ✅ Google Sheet connection - WORKING
-   2. ✅ Data parsing - WORKING  
-   3. ⏳ AI analysis - Coming next
-   4. ⏳ Telegram integration - Coming next
-""")
-    
-    return True
-
-
-# ============================================================================
-# FULL ANALYSIS & NOTIFICATION FUNCTION
+# MAIN ANALYSIS FUNCTION
 # ============================================================================
 
 def run_full_analysis():
-    """সম্পূর্ণ analysis চালায় এবং notification পাঠায়"""
+    """সম্পূর্ণ analysis + AI advice + notification"""
     
     print("\n" + "="*70)
-    print("🤖 AI PRODUCTIVITY ANALYSIS")
+    print("🤖 AI PRODUCTIVITY ANALYSIS (Online Multi-Provider)")
     print("="*70 + "\n")
     
-    # Connect to Google Sheets
     service = get_google_sheets_service()
     if not service:
         return False
     
-    # Read data
-    print("📥 Data loading...")
+    print("📥 Loading data...")
     planning_data = read_sheet_data(service, SPREADSHEET_ID, PLANNING_SHEET)
     tasklist_data = read_sheet_data(service, SPREADSHEET_ID, TASKLIST_SHEET)
     
     if not planning_data or not tasklist_data:
-        print("❌ Data পড়তে পারিনি!")
         return False
     
-    # Parse data
     today_tasks = parse_planning_data(planning_data)
     actual_logs = parse_tasklist_data(tasklist_data)
     
     print(f"✅ Planning: {len(today_tasks)} tasks")
     print(f"✅ Logged: {len(actual_logs)} activities\n")
     
-    # Analyze
-    print("🔍 Analyzing productivity...")
+    print("🔍 Analyzing...")
     analysis = analyze_productivity(today_tasks, actual_logs)
     
-    # Generate report
-    print("📊 Generating report...\n")
     report = generate_ai_report(today_tasks, actual_logs, analysis)
-    
     print(report)
     
-    # Get AI advice (optional - comment out যদি Ollama না চাও)
-    # ai_advice = ask_ollama_for_advice(report)
-    # print(f"\n🤖 AI Advice:\n{ai_advice}\n")
+    # Get AI advice with fallback chain
+    print("\n" + "="*70)
+    print("🤖 Getting AI Advice...")
+    print("="*70)
+    ai_advice, provider_used = get_ai_advice(report)
+    print(f"\n💬 AI Advice (via {provider_used}):\n{ai_advice}\n")
     
     # Send to Telegram
     if TELEGRAM_BOT_TOKEN:
         print("="*70)
         print("📱 Sending to Telegram...")
-        print("="*70 + "\n")
         
-        # Read chat IDs from sheet if not manually set
-        chat_ids = TELEGRAM_CHAT_IDS
-        if not chat_ids:
-            chat_ids = read_telegram_ids_from_sheet(service, SPREADSHEET_ID)
+        chat_ids = TELEGRAM_CHAT_IDS or read_telegram_ids_from_sheet(service, SPREADSHEET_ID)
         
         if chat_ids:
-            # Combine report + AI advice
-            full_message = report
-            # if ai_advice:
-            #     full_message += f"\n💬 AI বলছে:\n{ai_advice}"
+            full_message = report + f"\n💬 AI বলছে:\n{ai_advice}\n\n_Powered by {provider_used}_"
             
             success = send_to_multiple_chats(TELEGRAM_BOT_TOKEN, chat_ids, full_message)
-            print(f"✅ {success}/{len(chat_ids)} টি chat এ message পাঠানো হয়েছে!")
+            print(f"✅ Sent to {success}/{len(chat_ids)} chats!")
         else:
-            print("⚠️ কোনো Telegram chat ID পাওয়া যায়নি!")
-            print("   TELEGRAM_CHAT_IDS list এ manually ID দাও অথবা")
-            print("   'telegram IDs' sheet এ chat IDs রাখো")
+            print("⚠️ No chat IDs found!")
     else:
-        print("\n⚠️ Telegram bot token set করা নেই!")
-        print("   TELEGRAM_BOT_TOKEN variable এ token দাও")
+        print("\n⚠️ Telegram bot token not set!")
     
     return True
 
@@ -536,47 +606,25 @@ def run_full_analysis():
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description='AI Productivity Agent')
-    parser.add_argument('--mode', choices=['test', 'analyze', 'notify'], 
-                       default='test',
-                       help='Run mode: test (data reading), analyze (full analysis), notify (analysis + telegram)')
+    parser = argparse.ArgumentParser(description='AI Productivity Agent (Online)')
+    parser.add_argument('--mode', choices=['analyze', 'notify'], 
+                       default='analyze',
+                       help='Run mode: analyze (analysis only), notify (analysis + telegram)')
     
     args = parser.parse_args()
     
     print("\n" + "="*70)
-    print("🚀 AI PRODUCTIVITY AGENT")
-    print("   Google Sheets + Ollama Gemma + Telegram")
+    print("🚀 AI PRODUCTIVITY AGENT - ONLINE VERSION")
+    print("   Multi-Provider: Groq → Gemini → OpenAI → Anthropic → Local")
     print("="*70 + "\n")
     
-    if args.mode == 'test':
-        # Phase 1: Test data reading
-        success = test_sheet_reading()
-        
-        if success:
-            print("\n" + "="*70)
-            print("✅ Phase 1 Complete - Data Reading Working!")
-            print("="*70)
-            print("\n💡 Next: Run with --mode analyze for full analysis")
-            print("   Example: python ai_agent.py --mode analyze")
-        else:
-            print("\n" + "="*70)
-            print("❌ Test Failed")
-            print("="*70)
+    success = run_full_analysis()
     
-    elif args.mode == 'analyze':
-        # Phase 2: Full analysis (without telegram)
-        success = run_full_analysis()
-        
-        if success:
-            print("\n" + "="*70)
-            print("✅ Analysis Complete!")
-            print("="*70)
-    
-    elif args.mode == 'notify':
-        # Phase 3: Analysis + Telegram notification
-        success = run_full_analysis()
-        
-        if success:
-            print("\n" + "="*70)
-            print("✅ Notification Sent!")
-            print("="*70)
+    if success:
+        print("\n" + "="*70)
+        print("✅ Analysis Complete!")
+        print("="*70)
+    else:
+        print("\n" + "="*70)
+        print("❌ Analysis Failed")
+        print("="*70)

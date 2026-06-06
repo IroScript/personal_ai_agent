@@ -47,20 +47,23 @@ cp config.example.json config.json
 
 ## 📖 Usage
 
-### Test Mode (Data Reading)
-```bash
-python ai_agent.py --mode test
-```
-
-### Analysis Mode (Without Telegram)
+### Local Testing
 ```bash
 python ai_agent.py --mode analyze
 ```
 
-### Notify Mode (Analysis + Telegram)
-```bash
-python ai_agent.py --mode notify
-```
+### Automatic Scheduling (GitHub Actions)
+
+এই agent automatic run করাতে চাইলে GitHub Actions use করো।
+
+**Setup Guide:** দেখো [`GITHUB_ACTIONS_SETUP.md`](./GITHUB_ACTIONS_SETUP.md)
+
+**Schedule:** দিনে 4 বার automatic run (9 AM, 2 PM, 6 PM, 10 PM)
+
+**Code Update করলে কী হবে?**
+- তুমি যেকোনো code change করে `git push` করলে
+- পরবর্তী scheduled run এ **automatically নতুন code use হবে!**
+- কোনো manual update লাগবে না! ✅
 
 ## 📁 File Structure
 
