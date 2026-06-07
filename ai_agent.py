@@ -118,7 +118,9 @@ def parse_planning_data(data):
                 'target_time': row[3] if len(row) > 3 else '',
                 'frequency': row[4] if len(row) > 4 else '',
                 'description': row[5] if len(row) > 5 else '',
-                'when': row[6] if len(row) > 6 else ''
+                'frequency_detail': row[6] if len(row) > 6 else '',
+                'skip': row[7] if len(row) > 7 else '',
+                'when': row[8] if len(row) > 8 else ''  # Column I contains "Today"
             }
             
             if task['when'] and 'today' in str(task['when']).lower():
@@ -137,25 +139,30 @@ def parse_tasklist_data(data):
     if not data or len(data) < 2:
         return logs
     
+    # Skip the header row with "Jun' 2026"
     for row_idx, row in enumerate(data):
         if len(row) > 0 and isinstance(row[0], str):
-            if "jun" in str(row[0]).lower() and "2026" in str(row[0]).lower():
-                in_current_month = True
+            # Skip header rows
+            if "jun" in str(row[0]).lower() or "to time" in str(row[0]).lower():
                 continue
         
-        if len(row) >= 4:
-            task_name = row[3] if len(row) > 3 else ''
+        if len(row) >= 2:  # Need at least SL and task name
+            sl_num = row[0] if len(row) > 0 else ''
+            task_name = row[1] if len(row) > 1 else ''  # Column B has the task name
             
+            # Only process rows with SL numbers (1, 2, 3, etc.) and valid task names
             if task_name and task_name.strip() and len(task_name) > 3:
                 try:
                     log = {
-                        'sl': row[0] if len(row) > 0 else '',
-                        'date': row[2] if len(row) > 2 else '',
+                        'sl': sl_num,
                         'task': task_name,
-                        'time_or_duration': row[4] if len(row) > 4 else '',
+                        'time': row[2] if len(row) > 2 else '',  # Column C - time
+                        'colored_duration': row[3] if len(row) > 3 else '',  # Column D - colored cell
+                        'duration': row[4] if len(row) > 4 else '',  # Column E - duration in hours
                         'extra_info': row[5] if len(row) > 5 else ''
                     }
                     
+                    # Extract tag from task name like "Sleeping (Sleep)" -> "Sleep"
                     if '(' in task_name and ')' in task_name:
                         tag = task_name[task_name.find('(')+1:task_name.find(')')]
                         log['tag'] = tag
