@@ -12,16 +12,16 @@ import sys
 from datetime import datetime
 
 def run_agent():
-    """AI agent run করে"""
+    """Runs the AI agent"""
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     print(f"\n{'='*70}")
     print(f"🕐 Running AI Agent at {timestamp}")
     print(f"{'='*70}\n")
     
     try:
-        # ai_agent_online.py run করো
+        # Run ai_agent.py
         result = subprocess.run(
-            [sys.executable, 'ai_agent_online.py', '--mode', 'notify'],
+            [sys.executable, 'ai_agent.py', '--mode', 'notify'],
             cwd='.',
             capture_output=False,
             text=True
@@ -41,10 +41,10 @@ def run_agent():
 
 # Schedule times (24-hour format)
 SCHEDULE_TIMES = [
-    "09:00",  # Morning - সকালে পরিকল্পনা
-    "14:00",  # Afternoon - দুপুরে progress check
-    "18:00",  # Evening - সন্ধ্যায় review
-    "22:00"   # Night - রাতে final summary
+    "09:00",  # Morning - plan creation
+    "14:00",  # Afternoon - progress check
+    "18:00",  # Evening - review
+    "22:00"   # Night - final summary
 ]
 
 # Set up scheduled jobs

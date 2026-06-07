@@ -1,36 +1,36 @@
 # 🚀 GitHub Actions Setup Guide
 
-এই guide follow করে তুমি GitHub Actions এ AI agent automatic run করাতে পারবে।
+Follow this guide to set up automatic runs for your AI agent using GitHub Actions.
 
 ## 📋 Step-by-Step Setup
 
-### Step 1: GitHub Repository তে যাও
+### Step 1: Go to your GitHub Repository
 ```
 https://github.com/IroScript/personal_ai_agent
 ```
 
-### Step 2: Repository Secrets Add করো
+### Step 2: Add Repository Secrets
 
-1. Repository page এ যাও
-2. **Settings** > **Secrets and variables** > **Actions** এ ক্লিক করো
-3. **New repository secret** button ক্লিক করো
+1. Go to your repository page on GitHub.
+2. Click on **Settings** > **Secrets and variables** > **Actions**.
+3. Click the **New repository secret** button.
 
 #### Secret Name: `CONFIG_JSON`
 
-**Value:** তোমার `config.json` file এর পুরো content copy করে paste করো
+**Value:** Copy the entire content of your local `config.json` file and paste it here.
 
 ```json
 {
   "google_sheets": {
     "spreadsheet_id": "1q5FYRmURurN5RX5E8cIht6YR9x6VSSNlcsWOx45UCko",
-    ...পুরো config...
+    ...full config...
   }
 }
 ```
 
-⚠️ **Important:** পুরো `config.json` content একবারে paste করো!
+⚠️ **Important:** Paste the entire `config.json` content all at once!
 
-### Step 3: Code Push করো
+### Step 3: Push Your Code
 
 ```bash
 cd C:\Users\Irak\Desktop\Agent_AI
@@ -39,22 +39,22 @@ git commit -m "Add GitHub Actions workflow for automatic scheduling"
 git push origin main
 ```
 
-### Step 4: Verify Setup
+### Step 4: Verify the Setup
 
-1. GitHub repository এ যাও
-2. **Actions** tab click করো
-3. "AI Productivity Agent" workflow দেখতে পাবে
-4. Manual test করতে:
-   - Workflow select করো
-   - **Run workflow** button click করো
-   - Branch: `main` select করো
-   - **Run workflow** click করো
+1. Go to your GitHub repository.
+2. Click on the **Actions** tab.
+3. You should see the "AI Productivity Agent" workflow.
+4. To test manually:
+   - Select the workflow.
+   - Click the **Run workflow** dropdown button.
+   - Select Branch: `main`.
+   - Click the green **Run workflow** button.
 
 ---
 
 ## ⏰ Schedule Details
 
-Workflow **দিনে 4 বার** automatic run হবে:
+The workflow will run automatically **4 times a day**:
 
 | Time (UTC) | Bangladesh Time | Purpose |
 |------------|----------------|---------|
@@ -63,7 +63,7 @@ Workflow **দিনে 4 বার** automatic run হবে:
 | 12:30 PM | 6:00 PM | Evening review |
 | 4:30 PM | 10:00 PM | Night summary |
 
-### ⏱️ Timezone Adjust করতে:
+### ⏱️ To Adjust Timezone:
 
 File: `.github/workflows/productivity-agent.yml`
 
@@ -80,72 +80,72 @@ Example:
 
 ---
 
-## 🔄 Code Update করলে কী হবে?
+## 🔄 What happens when you update code?
 
 ### ✅ **Automatic Update!**
 
-যখনই তুমি code update করে push করবে, GitHub Actions **automatically** নতুন code ব্যবহার করবে!
+Whenever you update your code locally and push it to GitHub, GitHub Actions will **automatically** use your latest code!
 
 **Process:**
 
-1. তুমি local এ code edit করো
-2. Git commit + push করো:
+1. Edit the code locally.
+2. Commit and push the changes:
    ```bash
    git add .
    git commit -m "Updated AI analysis logic"
    git push origin main
    ```
-3. **পরবর্তী scheduled run এ নতুন code automatic use হবে!**
+3. **The next scheduled run will automatically use the new code!**
 
 **Example Timeline:**
 ```
-10:00 AM - তুমি code update করলে
-10:05 AM - GitHub এ push করলে
+10:00 AM - You update the code locally
+10:05 AM - You push it to GitHub
 2:00 PM - Next scheduled run → ✅ New code automatically used!
 ```
 
-### 🔧 Config Update করলে?
+### 🔧 What if you update config.json?
 
-যদি **শুধু config.json** update করো (API keys, settings etc):
+If you **only change settings inside config.json** (such as API keys, chat IDs, etc.):
 
 **Option A: Quick Update (Recommended)**
-1. GitHub এ যাও: Settings > Secrets > Actions
-2. `CONFIG_JSON` secret edit করো
-3. নতুন config paste করো
-4. ✅ পরবর্তী run এই নতুন config use করবে
+1. Go to GitHub: Settings > Secrets > Actions
+2. Edit the `CONFIG_JSON` secret
+3. Paste the new config details
+4. ✅ The next run will immediately use this new config
 
 **Option B: Via Code Push**
-1. Local এ `config.json` update করো
-2. Git push করো (কিন্তু `.gitignore` এ আছে তাই push হবে না)
-3. Manually secret update করতে হবে
+1. Update `config.json` locally
+2. Try pushing (but since it is ignored in `.gitignore`, it will not push)
+3. You must update the secret manually on GitHub
 
-⚠️ **Important:** `config.json` git এ যায় না (security জন্য), তাই config change করলে GitHub Secret manually update করতে হবে।
+⚠️ **Important:** `config.json` is not tracked by Git for security reasons. Therefore, when you update config settings, you must manually update the GitHub Secret.
 
 ---
 
 ## 🧪 Manual Testing
 
-যেকোনো সময় manual test করতে পারো:
+You can run manual tests at any time:
 
 1. GitHub > Actions tab
-2. "AI Productivity Agent" workflow select
-3. **Run workflow** button
-4. **Run workflow** confirm
-5. Workflow execution দেখতে পাবে
+2. Select "AI Productivity Agent" workflow
+3. Click the **Run workflow** button
+4. Confirm **Run workflow**
+5. Monitor the workflow execution details
 
 ---
 
 ## 📊 Monitor Workflow
 
-### Workflow Status দেখতে:
+### To view Workflow Status:
 ```
 https://github.com/IroScript/personal_ai_agent/actions
 ```
 
-### Log দেখতে:
-1. Actions tab > Latest workflow run click করো
-2. "run-agent" job click করো
-3. প্রতিটা step এর detailed log দেখবে
+### To view logs:
+1. Click the latest workflow run inside the Actions tab.
+2. Click the "run-agent" job.
+3. Review the detailed logs for each step.
 
 ---
 
@@ -153,63 +153,63 @@ https://github.com/IroScript/personal_ai_agent/actions
 
 ### ❌ Workflow Failed?
 
-**Check করো:**
+**Please check:**
 
-1. **Secrets:** `CONFIG_JSON` ঠিকমতো set আছে কিনা
-2. **API Keys:** Groq/Gemini API keys valid কিনা
-3. **Logs:** Actions tab এ error message পড়ো
+1. **Secrets:** Make sure `CONFIG_JSON` is set up correctly.
+2. **API Keys:** Make sure Groq/Gemini API keys are valid.
+3. **Logs:** Read the error messages in the Actions tab.
 
 ### 🔍 Common Issues:
 
 **Issue 1: "config.json not found"**
-- Solution: `CONFIG_JSON` secret add করো
+- Solution: Add the `CONFIG_JSON` secret to your repository.
 
 **Issue 2: "API key invalid"**
-- Solution: Config এ API key ঠিক আছে কিনা check করো
+- Solution: Verify that the API keys inside your config details are correct.
 
 **Issue 3: "Sheet access denied"**
-- Solution: Service account email কে sheet এ access দিয়েছো কিনা check করো
+- Solution: Check if you shared your Google Sheet with the service account email and granted Editor permission.
 
 ---
 
 ## 💡 Pro Tips
 
 ### 1. **Test Before Scheduling**
-প্রথমবার setup করার পর manual run করে test করো:
+After setting up for the first time, trigger a manual run to test:
 ```
 Actions > Run workflow > Run workflow
 ```
 
 ### 2. **Monitor First Few Runs**
-প্রথম ২-৩ দিন logs check করো সব ঠিক আছে কিনা
+Check the logs of the first 2-3 runs to ensure everything behaves as expected.
 
 ### 3. **Adjust Schedule as Needed**
-যদি frequency বাড়াতে বা কমাতে চাও, `.github/workflows/productivity-agent.yml` edit করো
+To change how often or when the agent runs, edit `.github/workflows/productivity-agent.yml`.
 
 ### 4. **Backup Config**
-`config.json` এর একটা backup রাখো (local এ, password protected folder এ)
+Keep a local backup of `config.json` in a safe, password-protected directory.
 
 ---
 
 ## ✅ Setup Checklist
 
-- [ ] GitHub repository তে code push করেছি
-- [ ] `CONFIG_JSON` secret add করেছি
-- [ ] Workflow file (`.github/workflows/productivity-agent.yml`) আছে
-- [ ] Manual test করে দেখেছি কাজ করছে
-- [ ] Schedule timing ঠিক আছে (timezone adjust করেছি)
-- [ ] First scheduled run এর পর notification পেয়েছি
+- [ ] Code pushed to GitHub repository
+- [ ] `CONFIG_JSON` secret added
+- [ ] Workflow file (`.github/workflows/productivity-agent.yml`) exists
+- [ ] Manual test verified and working
+- [ ] Schedule timing set correctly (timezone adjusted)
+- [ ] Received Telegram notification after the first run
 
 ---
 
 ## 🎯 Summary
 
-✅ **Code update:** শুধু git push করো → Automatic update  
-✅ **Config update:** GitHub Secret manually update করো  
-✅ **Schedule:** দিনে 4 বার automatic run  
-✅ **Cost:** সম্পূর্ণ ফ্রি! (GitHub Actions free tier: 2000 min/month)  
-✅ **Monitoring:** Actions tab এ সব logs দেখতে পাবে  
+✅ **Code update:** Just run git push → Automatic update  
+✅ **Config update:** Manually update the GitHub Secret  
+✅ **Schedule:** Automatically runs 4 times a day  
+✅ **Cost:** 100% Free! (GitHub Actions free tier provides 2000 min/month)  
+✅ **Monitoring:** Access all execution logs in the Actions tab  
 
 ---
 
-**Questions?** GitHub Actions logs check করো বা এই file reference করো! 🚀
+**Questions?** Check GitHub Actions logs or refer to this setup file! 🚀

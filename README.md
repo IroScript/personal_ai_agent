@@ -1,20 +1,20 @@
 # 🤖 AI Productivity Agent
 
-একটি intelligent productivity tracking system যা Google Sheets, Ollama Gemma AI এবং Telegram এর সাথে integrate করা।
+An intelligent productivity tracking system integrated with Google Sheets, Ollama Gemma AI, and Telegram.
 
 ## ✨ Features
 
-- 📊 **Google Sheets Integration** - Planning এবং Tasklist থেকে data read করে
-- 🤖 **AI Analysis** - Ollama Gemma 3 1B model দিয়ে productivity analysis
-- 📱 **Telegram Notifications** - Multiple accounts এ automated reports
-- 📈 **Tag-based Tracking** - Sleep, Productive activities, Time wasted - সব track করে
-- 🎯 **Smart Comparisons** - Planned vs Actual tasks তুলনা করে motivational/strict feedback
+- 📊 **Google Sheets Integration** - Reads data from planning and tasklist sheets
+- 🤖 **AI Analysis** - Productivity analysis powered by Ollama Gemma 3 1B model (and online providers fallback)
+- 📱 **Telegram Notifications** - Automated reports sent to multiple accounts/chat IDs
+- 📈 **Tag-based Tracking** - Tracks sleep, productive activities, and time wasted
+- 🎯 **Smart Comparisons** - Compares planned vs actual tasks to provide motivational/strict feedback
 
 ## 🚀 Setup
 
 ### 1. Install Dependencies
 ```bash
-pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client requests
+pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client requests schedule
 ```
 
 ### 2. Setup Configuration
@@ -24,26 +24,26 @@ Copy `config.example.json` to `config.json` and fill in your credentials:
 cp config.example.json config.json
 ```
 
-তারপর `config.json` এ এই তথ্য গুলো add করো:
+Then add the following information in `config.json`:
 - Google Sheets API credentials
 - Spreadsheet ID
 - Telegram bot token
 - Telegram chat IDs
 
 ### 3. Google Sheets Setup
-1. Google Cloud Console এ যাও
-2. Sheets API enable করো
-3. Service Account তৈরি করো
-4. Credentials download করো
-5. তোমার Google Sheet এ service account email কে Editor access দাও
+1. Go to Google Cloud Console
+2. Enable the Sheets API
+3. Create a Service Account
+4. Download the credentials JSON file
+5. Share your Google Sheet with the service account email giving it Editor access
 
 ### 4. Telegram Bot Setup
-1. Telegram এ @BotFather কে message করো
-2. `/newbot` command দিয়ে bot তৈরি করো
-3. Bot token copy করো
-4. তোমার bot কে message পাঠাও
-5. `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` এ যাও
-6. Chat ID copy করো
+1. Message @BotFather on Telegram
+2. Create a new bot using the `/newbot` command
+3. Copy the Bot token
+4. Message your bot
+5. Go to `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates`
+6. Copy your Chat ID
 
 ## 📖 Usage
 
@@ -54,16 +54,16 @@ python ai_agent.py --mode analyze
 
 ### Automatic Scheduling (GitHub Actions)
 
-এই agent automatic run করাতে চাইলে GitHub Actions use করো।
+If you want to run this agent automatically, use GitHub Actions.
 
-**Setup Guide:** দেখো [`GITHUB_ACTIONS_SETUP.md`](./GITHUB_ACTIONS_SETUP.md)
+**Setup Guide:** See [`GITHUB_ACTIONS_SETUP.md`](./GITHUB_ACTIONS_SETUP.md)
 
-**Schedule:** দিনে 4 বার automatic run (9 AM, 2 PM, 6 PM, 10 PM)
+**Schedule:** Automatically runs 4 times a day (9 AM, 2 PM, 6 PM, 10 PM Bangladesh Time)
 
-**Code Update করলে কী হবে?**
-- তুমি যেকোনো code change করে `git push` করলে
-- পরবর্তী scheduled run এ **automatically নতুন code use হবে!**
-- কোনো manual update লাগবে না! ✅
+**What happens when you update code?**
+- Whenever you make changes to the code and do `git push`
+- The next scheduled run will **automatically use the new code!**
+- No manual server updates required! ✅
 
 ## 📁 File Structure
 
@@ -90,15 +90,15 @@ Agent_AI/
 - Column G: When (Today/Weekly)
 
 **TASKLIST Sheet:**
-- Column A: Serial
-- Column B: -
 - Column C: Date
-- Column D: Task name with tag (e.g., "Sleep (Sleep)")
-- Column E: Duration
+- Column D: Task name with tag in brackets (e.g., "Sleeping (Sleep)")
+- Column F: Start time
+- Column G: End time
+- Column J: Duration in decimal hours (calculated by formula)
 
 ## 🤝 Contributing
 
-এই project টি personal use এর জন্য তৈরি, কিন্তু improvements এবং suggestions welcome!
+This project is built for personal use, but improvements and suggestions are welcome!
 
 ## 📝 License
 

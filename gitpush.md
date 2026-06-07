@@ -3,6 +3,7 @@
 ### Always Check All files
 ### Always verify those are 200% avilable in Gihub cloud
 ### Let me know these above things are done, cross checked, and again verified those are done.
+### Never write anything in Bengali for Github. Write only in English.
 
 # Git Push Verification Guide
 

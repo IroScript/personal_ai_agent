@@ -22,16 +22,16 @@ from googleapiclient.errors import HttpError
 # ============================================================================
 
 def load_config():
-    """config.json থেকে সব settings load করে"""
+    """Loads all settings from config.json"""
     try:
         with open('config.json', 'r', encoding='utf-8') as f:
             config = json.load(f)
         return config
     except FileNotFoundError:
-        print("❌ config.json file পাওয়া যাচ্ছে না!")
+        print("❌ config.json file not found!")
         return None
     except json.JSONDecodeError:
-        print("❌ config.json file ঠিকমতো parse করতে পারিনি!")
+        print("❌ Failed to parse config.json file!")
         return None
 
 CONFIG = load_config()
@@ -50,7 +50,7 @@ if CONFIG:
     TELEGRAM_BOT_TOKEN = CONFIG['telegram']['bot_token']
     TELEGRAM_CHAT_IDS = CONFIG['telegram']['chat_ids']
 else:
-    print("⚠️ Config load করতে পারিনি!")
+    print("⚠️ Failed to load configuration!")
     sys.exit(1)
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
@@ -61,7 +61,7 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 # ============================================================================
 
 def get_google_sheets_service():
-    """Google Sheets API service create করে"""
+    """Creates Google Sheets API service"""
     try:
         if CREDENTIAL_DATA:
             creds = Credentials.from_service_account_info(
@@ -69,7 +69,7 @@ def get_google_sheets_service():
                 scopes=SCOPES
             )
         else:
-            print("❌ Google Sheets credentials পাওয়া যাচ্ছে না!")
+            print("❌ Google Sheets credentials not found!")
             return None
         
         service = build('sheets', 'v4', credentials=creds)
@@ -80,7 +80,7 @@ def get_google_sheets_service():
 
 
 def read_sheet_data(service, spreadsheet_id, sheet_name):
-    """Google Sheet থেকে data read করে"""
+    """Reads data from Google Sheet"""
     try:
         result = service.spreadsheets().values().get(
             spreadsheetId=spreadsheet_id,
@@ -91,7 +91,7 @@ def read_sheet_data(service, spreadsheet_id, sheet_name):
         return values
     
     except HttpError as e:
-        print(f"❌ Sheet '{sheet_name}' পড়তে error: {e}")
+        print(f"❌ Error reading sheet '{sheet_name}': {e}")
         return None
 
 
@@ -100,7 +100,7 @@ def read_sheet_data(service, spreadsheet_id, sheet_name):
 # ============================================================================
 
 def parse_planning_data(data):
-    """TASKS_PLAN sheet থেকে আজকের task list বের করে"""
+    """Extracts today's task list from TASKS_PLAN sheet"""
     tasks = []
     
     if not data or len(data) < 2:
@@ -132,46 +132,93 @@ def parse_planning_data(data):
     return tasks
 
 
+def calculate_duration_in_hours(start_str, end_str):
+    """Calculates task duration in hours from start and end times"""
+    try:
+        start_str = start_str.strip().replace('.', ':')
+        end_str = end_str.strip().replace('.', ':')
+        if not start_str or not end_str:
+            return 0.0
+        
+        # Parse times (Format e.g., "12:00 AM", "10:30 AM")
+        start_time = datetime.strptime(start_str, "%I:%M %p")
+        end_time = datetime.strptime(end_str, "%I:%M %p")
+        
+        # If end time is before start time, it means it crossed midnight
+        if end_time < start_time:
+            diff = (end_time - start_time).total_seconds() + 24 * 3600
+        else:
+            diff = (end_time - start_time).total_seconds()
+            
+        return diff / 3600.0
+    except Exception:
+        return 0.0
+
+
 def parse_tasklist_data(data):
-    """TASKLIST sheet থেকে আজকের actual time log বের করে"""
+    """Extracts today's actual time log from TASKLIST sheet"""
     logs = []
     
     if not data or len(data) < 2:
         return logs
-    
-    # Skip the header row with "Jun' 2026"
-    for row_idx, row in enumerate(data):
-        if len(row) > 0 and isinstance(row[0], str):
-            # Skip header rows
-            if "jun" in str(row[0]).lower() or "to time" in str(row[0]).lower():
-                continue
         
-        if len(row) >= 2:  # Need at least SL and task name
-            sl_num = row[0] if len(row) > 0 else ''
-            task_name = row[1] if len(row) > 1 else ''  # Column B has the task name
+    today_day = str(datetime.now().day)
+    
+    for row_idx, row in enumerate(data):
+        # We need at least up to Column D (index 3) to get the task name
+        if len(row) > 3:
+            # Column C (index 2) contains date
+            date_val = str(row[2]).strip()
             
-            # Only process rows with SL numbers (1, 2, 3, etc.) and valid task names
-            if task_name and task_name.strip() and len(task_name) > 3:
-                try:
+            # Clean and normalize date to match today_day
+            normalized_day = ""
+            try:
+                normalized_day = str(int(float(date_val)))
+            except ValueError:
+                normalized_day = date_val
+                
+            if normalized_day == today_day:
+                task_name = str(row[3]).strip()  # Column D (index 3) contains task name with tag
+                
+                if task_name and len(task_name) > 3:
+                    start_time = str(row[5]).strip() if len(row) > 5 else '' # Column F (index 5)
+                    end_time = str(row[6]).strip() if len(row) > 6 else ''   # Column G (index 6)
+                    
+                    # Read sheet duration from Column J (index 9)
+                    sheet_duration = 0.0
+                    if len(row) > 9:
+                        try:
+                            sheet_duration = float(str(row[9]).strip())
+                        except ValueError:
+                            pass
+                    
+                    # Perform python-side calculation for verification
+                    calculated_duration = calculate_duration_in_hours(start_time, end_time)
+                    
+                    # Verification check: If calculated duration is valid and differs from sheet, prioritize verified one
+                    if calculated_duration > 0:
+                        final_duration = calculated_duration
+                    else:
+                        final_duration = sheet_duration
+                    
                     log = {
-                        'sl': sl_num,
+                        'sl': date_val,
                         'task': task_name,
-                        'time': row[2] if len(row) > 2 else '',  # Column C - time
-                        'colored_duration': row[3] if len(row) > 3 else '',  # Column D - colored cell
-                        'duration': row[4] if len(row) > 4 else '',  # Column E - duration in hours
-                        'extra_info': row[5] if len(row) > 5 else ''
+                        'start_time': start_time,
+                        'end_time': end_time,
+                        'duration': final_duration,
+                        'sheet_duration': sheet_duration,
+                        'calculated_duration': calculated_duration
                     }
                     
                     # Extract tag from task name like "Sleeping (Sleep)" -> "Sleep"
                     if '(' in task_name and ')' in task_name:
                         tag = task_name[task_name.find('(')+1:task_name.find(')')]
-                        log['tag'] = tag
+                        log['tag'] = tag.strip()
                     else:
                         log['tag'] = ''
                     
                     logs.append(log)
-                except Exception as e:
-                    continue
     
     return logs
 
@@ -181,7 +228,7 @@ def parse_tasklist_data(data):
 # ============================================================================
 
 def call_groq_api(prompt, api_key, model):
-    """Groq API call করে"""
+    """Calls Groq API"""
     try:
         url = "https://api.groq.com/openai/v1/chat/completions"
         
@@ -193,7 +240,7 @@ def call_groq_api(prompt, api_key, model):
         data = {
             "model": model,
             "messages": [
-                {"role": "system", "content": "তুমি একজন strict productivity coach। সংক্ষেপে বাংলায় উত্তর দাও।"},
+                {"role": "system", "content": "You are a strict productivity coach. Respond concisely in Bengali."},
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.7,
@@ -215,7 +262,7 @@ def call_groq_api(prompt, api_key, model):
 
 
 def call_gemini_api(prompt, api_key, model):
-    """Google Gemini API call করে"""
+    """Calls Google Gemini API"""
     try:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
         
@@ -224,7 +271,7 @@ def call_gemini_api(prompt, api_key, model):
         data = {
             "contents": [{
                 "parts": [{
-                    "text": f"তুমি একজন strict productivity coach। সংক্ষেপে বাংলায় উত্তর দাও।\n\n{prompt}"
+                    "text": f"You are a strict productivity coach. Respond concisely in Bengali.\n\n{prompt}"
                 }]
             }]
         }
@@ -244,7 +291,7 @@ def call_gemini_api(prompt, api_key, model):
 
 
 def call_openai_api(prompt, api_key, model):
-    """OpenAI API call করে"""
+    """Calls OpenAI API"""
     try:
         url = "https://api.openai.com/v1/chat/completions"
         
@@ -256,7 +303,7 @@ def call_openai_api(prompt, api_key, model):
         data = {
             "model": model,
             "messages": [
-                {"role": "system", "content": "তুমি একজন strict productivity coach। সংক্ষেপে বাংলায় উত্তর দাও।"},
+                {"role": "system", "content": "You are a strict productivity coach. Respond concisely in Bengali."},
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.7,
@@ -278,7 +325,7 @@ def call_openai_api(prompt, api_key, model):
 
 
 def call_anthropic_api(prompt, api_key, model):
-    """Anthropic Claude API call করে"""
+    """Calls Anthropic Claude API"""
     try:
         url = "https://api.anthropic.com/v1/messages"
         
@@ -292,7 +339,7 @@ def call_anthropic_api(prompt, api_key, model):
             "model": model,
             "max_tokens": 500,
             "messages": [
-                {"role": "user", "content": f"তুমি একজন strict productivity coach। সংক্ষেপে বাংলায় উত্তর দাও।\n\n{prompt}"}
+                {"role": "user", "content": f"You are a strict productivity coach. Respond concisely in Bengali.\n\n{prompt}"}
             ]
         }
         
@@ -311,7 +358,7 @@ def call_anthropic_api(prompt, api_key, model):
 
 
 def call_local_ollama(prompt, model):
-    """Local Ollama model call করে"""
+    """Calls local Ollama model"""
     try:
         result = subprocess.run(
             ['ollama', 'run', model, prompt],
@@ -339,12 +386,12 @@ def call_local_ollama(prompt, model):
 
 
 def get_ai_advice(report):
-    """Multiple AI providers থেকে fallback chain দিয়ে advice নেয়
+    """Takes advice from multiple AI providers using a fallback chain
     
     Priority: Groq → Gemini → OpenAI → Anthropic → Local Ollama
     """
     
-    prompt = f"""তুমি একজন strict productivity coach। নিচের report দেখে user কে একটা ছোট motivational বা strict message দাও (maximum 3-4 লাইন, বাংলায়):
+    prompt = f"""You are a strict productivity coach. Based on the following report, give the user a short motivational or strict message (maximum 3-4 lines, in English):
 
 {report}
 
@@ -414,7 +461,7 @@ Message:"""
     
     # If all failed
     print(f"❌ All providers failed. Tried: {', '.join(providers_tried)}")
-    return "Keep working hard! তোমার productivity improve করতে হবে! 💪", "Fallback"
+    return "Keep working hard! You need to improve your productivity! 💪", "Fallback"
 
 
 # ============================================================================
@@ -422,7 +469,7 @@ Message:"""
 # ============================================================================
 
 def analyze_productivity(planning_tasks, actual_logs):
-    """Planning আর actual data তুলনা করে productivity analysis করে"""
+    """Compares planning and actual data to analyze productivity"""
     
     analysis = {
         'total_planned_tasks': len(planning_tasks),
@@ -443,11 +490,11 @@ def analyze_productivity(planning_tasks, actual_logs):
             if 'sleep' in tag.lower():
                 analysis['sleep_activities'].append(log)
             
-            productive_tags = ['ERP', 'Business', 'Coding', 'Learning', 'Reading', 'Work']
+            productive_tags = ['erp', 'business', 'coding', 'learning', 'reading', 'work', 'family time']
             if any(pt.lower() in tag.lower() for pt in productive_tags):
                 analysis['productive_activities'].append(log)
             
-            waste_tags = ['Social Media', 'Gossip', 'Random', 'Facebook']
+            waste_tags = ['social media', 'gossip', 'random', 'facebook']
             if any(wt.lower() in tag.lower() for wt in waste_tags):
                 analysis['time_wasted_activities'].append(log)
     
@@ -457,36 +504,39 @@ def analyze_productivity(planning_tasks, actual_logs):
 
 
 def generate_ai_report(planning_tasks, actual_logs, analysis):
-    """AI দিয়ে report তৈরি করে"""
+    """Generates report using AI"""
     
     top_tags = list(analysis['tags_summary'].items())[:5]
+    
+    total_sleep_hours = sum(log.get('duration', 0.0) for log in analysis['sleep_activities'])
+    total_productive_hours = sum(log.get('duration', 0.0) for log in analysis['productive_activities'])
+    total_wasted_hours = sum(log.get('duration', 0.0) for log in analysis['time_wasted_activities'])
     
     report = f"""
 📊 **Productivity Report - {datetime.now().strftime('%d %B %Y')}**
 
-✅ Planning: {analysis['total_planned_tasks']} টি task
-📝 Logged: {analysis['total_logged_activities']} টি activity
+✅ Planning: {analysis['total_planned_tasks']} tasks
+📝 Logged: {analysis['total_logged_activities']} activities
 
 🏷️ Top 5 Tags:
 """
     
     for tag, count in top_tags:
-        report += f"   • {tag}: {count} বার\n"
+        report += f"   • {tag}: {count} times\n"
     
     report += f"""
-😴 Sleep: {len(analysis['sleep_activities'])} টি
-💼 Productive: {len(analysis['productive_activities'])} টি
-⏰ Time Wasted: {len(analysis['time_wasted_activities'])} টি
-
+😴 Sleep: {len(analysis['sleep_activities'])} logs ({total_sleep_hours:.2f} hr)
+💼 Productive: {len(analysis['productive_activities'])} logs ({total_productive_hours:.2f} hr)
+⏰ Time Wasted: {len(analysis['time_wasted_activities'])} logs ({total_wasted_hours:.2f} hr)
 """
+
+    if total_sleep_hours > 9.5:
+        report += "⚠️ **Sleeping too much! Focus on your work!**\n"
     
-    if len(analysis['sleep_activities']) > 5:
-        report += "⚠️ **বেশি ঘুমাচ্ছো! কাজে মন দাও!**\n"
-    
-    if len(analysis['time_wasted_activities']) > len(analysis['productive_activities']):
-        report += "❌ **সময় নষ্ট বেশি, productive কাজ কম!**\n"
+    if total_wasted_hours > total_productive_hours:
+        report += "❌ **Too much wasted time, not enough productive work!**\n"
     else:
-        report += "🎉 **ভালো productivity! চালিয়ে যাও!**\n"
+        report += "🎉 **Good productivity! Keep it up!**\n"
     
     return report
 
@@ -496,7 +546,7 @@ def generate_ai_report(planning_tasks, actual_logs, analysis):
 # ============================================================================
 
 def send_telegram_message(bot_token, chat_id, message):
-    """Telegram এ message পাঠায়"""
+    """Sends message to Telegram"""
     
     if not bot_token or not chat_id:
         return False
@@ -517,7 +567,7 @@ def send_telegram_message(bot_token, chat_id, message):
 
 
 def send_to_multiple_chats(bot_token, chat_ids, message):
-    """একাধিক chat এ message পাঠায়"""
+    """Sends message to multiple chats"""
     
     success_count = 0
     for chat_id in chat_ids:
@@ -527,7 +577,7 @@ def send_to_multiple_chats(bot_token, chat_ids, message):
 
 
 def read_telegram_ids_from_sheet(service, spreadsheet_id):
-    """telegram IDs sheet থেকে chat IDs পড়ে"""
+    """Reads chat IDs from telegram IDs sheet"""
     
     try:
         data = read_sheet_data(service, spreadsheet_id, TELEGRAM_IDS_SHEET)
@@ -550,7 +600,7 @@ def read_telegram_ids_from_sheet(service, spreadsheet_id):
 # ============================================================================
 
 def run_full_analysis():
-    """সম্পূর্ণ analysis + AI advice + notification"""
+    """Performs full analysis + AI advice + notification"""
     
     print("\n" + "="*70)
     print("🤖 AI PRODUCTIVITY ANALYSIS (Online Multi-Provider)")
@@ -594,7 +644,7 @@ def run_full_analysis():
         chat_ids = TELEGRAM_CHAT_IDS or read_telegram_ids_from_sheet(service, SPREADSHEET_ID)
         
         if chat_ids:
-            full_message = report + f"\n💬 AI বলছে:\n{ai_advice}\n\n_Powered by {provider_used}_"
+            full_message = report + f"\n💬 AI says:\n{ai_advice}\n\n_Powered by {provider_used}_"
             
             success = send_to_multiple_chats(TELEGRAM_BOT_TOKEN, chat_ids, full_message)
             print(f"✅ Sent to {success}/{len(chat_ids)} chats!")
