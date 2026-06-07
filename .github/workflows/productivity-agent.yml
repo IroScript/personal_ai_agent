@@ -44,7 +44,9 @@ jobs:
     
     - name: 🤖 Run AI Productivity Agent
       run: |
-        python ai_agent.py --mode notify
+        python ai_agent.py --mode notify 2>&1 | tee agent_output.log
+        echo "--- Agent Output End ---"
+        cat agent_output.log
       env:
         PYTHONIOENCODING: utf-8
     
