@@ -10,6 +10,14 @@ import os
 import json
 import sys
 import subprocess
+
+# Fix Windows console encoding issues for emojis
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except AttributeError:
+        pass
 import requests
 from datetime import datetime
 from collections import Counter
@@ -155,12 +163,83 @@ def calculate_duration_in_hours(start_str, end_str):
         return 0.0
 
 
+def filter_current_month_data(data):
+    """
+    Filters and returns only the rows of the TASKLIST data that belong to the current month.
+    It identifies month blocks dynamically by looking for cell values matching month headers (e.g. Jun' 2026) in Column C.
+    """
+    import re
+    
+    if not data or len(data) < 2:
+        return data
+        
+    # Match patterns like: Jun' 2026, JAN' 2026, May 2026, etc. in Column C (index 2)
+    month_pattern = re.compile(
+        r"^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*['\s]+(20\d{2})$",
+        re.IGNORECASE
+    )
+    
+    # Identify the start index of all month blocks in the sheet
+    month_blocks = [] # List of tuples: (month_name, year, start_row_idx)
+    
+    for idx, row in enumerate(data):
+        if len(row) > 2:
+            cell_val = str(row[2]).strip()
+            match = month_pattern.match(cell_val)
+            if match:
+                month_name = match.group(1).lower()[:3]
+                year = int(match.group(2))
+                month_blocks.append((month_name, year, idx))
+                
+    if not month_blocks:
+        # Default fallback: return all data if no headers found
+        return data
+        
+    # Sort blocks by their row index in the sheet
+    month_blocks.sort(key=lambda x: x[2])
+    
+    # Get current month and year
+    now = datetime.now()
+    months_map = {
+        1: "jan", 2: "feb", 3: "mar", 4: "apr", 5: "may", 6: "jun",
+        7: "jul", 8: "aug", 9: "sep", 10: "oct", 11: "nov", 12: "dec"
+    }
+    current_month = months_map[now.month]
+    current_year = now.year
+    
+    # Find the block matching the current month and year
+    target_block_idx = -1
+    for i, block in enumerate(month_blocks):
+        if block[0] == current_month and block[1] == current_year:
+            target_block_idx = i
+            break
+            
+    if target_block_idx == -1:
+        # If current month block is not found, default to the first block (newest block at the top)
+        target_block_idx = 0
+        
+    start_idx = month_blocks[target_block_idx][2]
+    
+    # The block ends where the next month block starts, or at the end of the sheet data
+    if target_block_idx + 1 < len(month_blocks):
+        end_idx = month_blocks[target_block_idx + 1][2]
+    else:
+        end_idx = len(data)
+        
+    # Return only the slice belonging to the current month (preserving header at index 0)
+    header = [data[0]] if len(data) > 0 else []
+    return header + data[start_idx:end_idx]
+
+
 def parse_tasklist_data(data):
     """Extracts today's actual time log from TASKLIST sheet"""
     logs = []
     
     if not data or len(data) < 2:
         return logs
+        
+    # Filter only the current month block dynamically
+    data = filter_current_month_data(data)
         
     today_day = str(datetime.now().day)
     
