@@ -19,9 +19,9 @@ def run_agent():
     print(f"{'='*70}\n")
     
     try:
-        # Run ai_agent.py
+        # Run ai_agent.py in dynamic mode
         result = subprocess.run(
-            [sys.executable, 'ai_agent.py', '--mode', 'notify'],
+            [sys.executable, 'ai_agent.py', '--mode', 'dynamic'],
             cwd='.',
             capture_output=False,
             text=True
@@ -39,24 +39,18 @@ def run_agent():
 # SCHEDULE CONFIGURATION
 # ============================================================================
 
-# Schedule times (24-hour format)
-SCHEDULE_TIMES = [
-    "09:00",  # Morning - plan creation
-    "14:00",  # Afternoon - progress check
-    "18:00",  # Evening - review
-    "22:00"   # Night - final summary
-]
+# Schedule interval (minutes)
+CHECK_INTERVAL_MINUTES = 30
 
-# Set up scheduled jobs
-for time_str in SCHEDULE_TIMES:
-    schedule.every().day.at(time_str).do(run_agent)
-    print(f"⏰ Scheduled: Daily at {time_str}")
+# Set up scheduled jobs to run every 30 minutes
+schedule.every(CHECK_INTERVAL_MINUTES).minutes.do(run_agent)
+print(f"⏰ Scheduled: Every {CHECK_INTERVAL_MINUTES} minutes")
 
 print(f"\n{'='*70}")
 print("🤖 AI Productivity Agent Scheduler Started")
 print(f"{'='*70}")
-print(f"📅 Runs {len(SCHEDULE_TIMES)} times per day")
-print(f"⏰ Schedule: {', '.join(SCHEDULE_TIMES)}")
+print(f"📅 Mode: Dynamic AI-judged nudge")
+print(f"⏰ Schedule: Running every {CHECK_INTERVAL_MINUTES} minutes")
 print(f"🔄 Press Ctrl+C to stop")
 print(f"{'='*70}\n")
 

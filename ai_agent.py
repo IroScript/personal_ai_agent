@@ -736,6 +736,163 @@ def run_full_analysis():
 
 
 # ============================================================================
+# DYNAMIC AI-JUDGED TRIGGER FUNCTIONS
+# ============================================================================
+
+def ai_nudge_needed(actual_logs, service):
+    """Asks AI to evaluate recent logs and decide if a Telegram notification is needed"""
+    import re
+    
+    now = datetime.now()
+    current_time_str = now.strftime("%I:%M %p")
+    
+    # Sort logs by their parsed start/end times if possible, or assume they are in order
+    last_log = actual_logs[-1] if actual_logs else None
+    
+    last_activity_name = last_log['task'] if last_log else "None"
+    last_activity_end = last_log['end_time'] if last_log else "None"
+    last_activity_tag = last_log['tag'].lower() if last_log else ""
+    
+    # Parse last activity end time to find elapsed hours
+    elapsed_hours = 0.0
+    if last_log and last_log['end_time']:
+        try:
+            t_str = last_log['end_time'].strip().replace('.', ':')
+            t = datetime.strptime(t_str, "%I:%M %p")
+            last_dt = now.replace(hour=t.hour, minute=t.minute, second=0, microsecond=0)
+            
+            if last_dt > now:
+                from datetime import timedelta
+                last_dt = last_dt - timedelta(days=1)
+                
+            elapsed_seconds = (now - last_dt).total_seconds()
+            elapsed_hours = elapsed_seconds / 3600.0
+        except Exception as e:
+            print(f"⚠️ Error parsing last activity end time: {e}")
+            elapsed_hours = 0.0
+            
+    print(f"🕒 Current Local Time: {current_time_str}")
+    print(f"📝 Last Logged Activity: \"{last_activity_name}\" at {last_activity_end}")
+    print(f"⏳ Time elapsed since last activity end: {elapsed_hours:.2f} hours")
+    
+    # Compile the recent logs (last 6 logs) for AI context
+    recent_context = ""
+    for log in actual_logs[-6:]:
+        recent_context += f"- {log['task']} ({log['start_time']} - {log['end_time']})\n"
+        
+    prompt = f"""
+You are a highly perceptive, strict personal productivity coach.
+Analyze the user's recent activity tracking logs to decide if they need a critical nudge/notification via Telegram to stay on track.
+
+Current Local Time: {current_time_str}
+Time elapsed since the last logged activity ended: {elapsed_hours:.2f} hours
+Last logged activity: "{last_activity_name}" (Tag: {last_activity_tag})
+
+Recent Activity Logs (chronological):
+{recent_context}
+
+Trigger Criteria for Nudge (DECISION: YES):
+1. The user has been inactive (no logs) for more than 3.0 hours, and they are NOT currently sleeping (their last task was not sleep).
+2. The user has spent too much consecutive time (e.g. > 1.5 hours) on unproductive tasks (e.g. Social Media, Lewd, Entertainment, Gossiping) and is currently distracted.
+3. It's late night (after 12:00 AM) and they haven't logged Sleep yet (suggesting they are staying up late wasting time).
+
+Otherwise (DECISION: NO):
+- The user is currently productive, sleeping, or active recently without wasting time.
+
+Format your output exactly as follows (no other text, no markdown block):
+DECISION: [YES or NO]
+MESSAGE: [Your strict, blunt, and motivating 2-3 line nudge message in English if YES]
+"""
+    
+    api_key = CONFIG['ai_model']['online']['groq']['api_key']
+    model = CONFIG['ai_model']['online']['groq']['model']
+    
+    if not api_key:
+        print("❌ Groq API key is missing!")
+        return
+        
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    data = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": "You are a strict, blunt productivity coach. Respond only in the requested format."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.5,
+        "max_tokens": 500
+    }
+    
+    try:
+        resp = requests.post(url, headers=headers, json=data, timeout=30)
+        if resp.status_code == 200:
+            result = resp.json()
+            ai_response = result['choices'][0]['message']['content'].strip()
+            print(f"\n💬 AI Judgment Response:\n{ai_response}\n")
+            
+            decision_match = re.search(r"DECISION:\s*(YES|NO)", ai_response, re.IGNORECASE)
+            message_match = re.search(r"MESSAGE:\s*(.*)", ai_response, re.DOTALL | re.IGNORECASE)
+            
+            decision = decision_match.group(1).upper() if decision_match else "NO"
+            message = message_match.group(1).strip() if message_match else ""
+            
+            if decision == "YES" and message:
+                print(f"🚨 AI Decided to Nudge! Sending Telegram Message...")
+                full_message = f"🚨 **AI Nudge Alert!**\n\n{message}\n\n_Checked at {current_time_str}_"
+                
+                chat_ids = TELEGRAM_CHAT_IDS or read_telegram_ids_from_sheet(service, SPREADSHEET_ID)
+                if chat_ids:
+                    success = send_to_multiple_chats(TELEGRAM_BOT_TOKEN, chat_ids, full_message)
+                    print(f"✅ Telegram notification sent to {success} chats!")
+                else:
+                    print("⚠️ No Telegram chat IDs found!")
+            else:
+                print("💤 AI Decided: No nudge needed at this time. Remaining silent.")
+        else:
+            print(f"⚠️ Groq API error: {resp.status_code} - {resp.text}")
+    except Exception as e:
+        print(f"⚠️ Failed calling AI: {e}")
+
+
+def run_dynamic_analysis():
+    """Checks recent logs and lets AI decide if a Telegram nudge is needed"""
+    print("\n" + "="*70)
+    print("🤖 RUNNING DYNAMIC AI-JUDGED TRIGGER CHECK")
+    print("="*70 + "\n")
+    
+    service = get_google_sheets_service()
+    if not service:
+        return False
+        
+    print("📥 Loading data...")
+    planning_data = read_sheet_data(service, SPREADSHEET_ID, PLANNING_SHEET)
+    tasklist_data = read_sheet_data(service, SPREADSHEET_ID, TASKLIST_SHEET)
+    
+    if not tasklist_data:
+        return False
+        
+    today_tasks = parse_planning_data(planning_data)
+    actual_logs = parse_tasklist_data(tasklist_data)
+    
+    if not actual_logs:
+        now = datetime.now()
+        if now.hour >= 10:
+            print("⚠️ No activities logged today yet and it is after 10 AM!")
+            ai_nudge_needed(actual_logs, service)
+        else:
+            print("💤 Early morning, no logs yet. Silent.")
+        return True
+        
+    print("🔍 Analyzing recent activities...")
+    ai_nudge_needed(actual_logs, service)
+    return True
+
+
+# ============================================================================
 # MAIN PROGRAM
 # ============================================================================
 
@@ -743,9 +900,9 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description='AI Productivity Agent (Online)')
-    parser.add_argument('--mode', choices=['analyze', 'notify'], 
+    parser.add_argument('--mode', choices=['analyze', 'notify', 'dynamic'], 
                        default='analyze',
-                       help='Run mode: analyze (analysis only), notify (analysis + telegram)')
+                       help='Run mode: analyze (analysis only), notify (analysis + telegram), dynamic (AI-judged dynamic nudge)')
     
     args = parser.parse_args()
     
@@ -754,7 +911,10 @@ if __name__ == "__main__":
     print("   Multi-Provider: Groq → Gemini → OpenAI → Anthropic → Local")
     print("="*70 + "\n")
     
-    success = run_full_analysis()
+    if args.mode == 'dynamic':
+        success = run_dynamic_analysis()
+    else:
+        success = run_full_analysis()
     
     if success:
         print("\n" + "="*70)
