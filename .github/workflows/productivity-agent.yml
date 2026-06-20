@@ -1,9 +1,32 @@
 name: AI Productivity Agent
 
+# ==============================================================================
+# ⏰ GITHUB ACTIONS SCHEDULE & TIMEZONE LOGIC
+# ==============================================================================
+#
+# 🇧🇩 BANGLADESH STANDARD TIME (BST) = UTC + 6 HOURS
+#
+# ❌ PROHIBITED SLEEP HOUR RANGE (ঘুমের সময় - কোনো রান হবে না):
+#    রাত ১:০০ (1:00 AM BST) থেকে সকাল ৭:০০ (7:00 AM BST) পর্যন্ত কোনো অ্যাকশন চলবে না।
+#    - 1:00 AM BST = 19:00 UTC (prohibited)
+#    - 7:00 AM BST = 01:00 UTC (prohibited)
+#
+# ✅ ALLOWED RUNNING HOUR RANGE:
+#    সকাল ৭:৩০ (7:30 AM BST) থেকে রাত ১২:৩০ (12:30 AM BST) পর্যন্ত প্রতি ৩০ মিনিটে চলবে।
+#
+# 🕒 UTC CONVERSIONS & CRON RULES:
+#    1. '30 1 * * *'     -> 01:30 UTC = 7:30 AM BST (সকালের প্রথম রান)
+#    2. '*/30 2-18 * * *' -> 02:00 UTC to 18:30 UTC = 8:00 AM BST to 12:30 AM BST (প্রতি ৩০ মিনিট)
+#
+# ⚠️ If you want to change this schedule in the future, modify the cron expressions below.
+# ==============================================================================
+
 on:
   schedule:
-    # Run every 30 minutes
-    - cron: '*/30 * * * *'
+    # 7:30 AM BST (01:30 UTC)
+    - cron: '30 1 * * *'
+    # Every 30 minutes from 8:00 AM BST (02:00 UTC) to 12:30 AM BST (18:30 UTC)
+    - cron: '*/30 2-18 * * *'
   
   workflow_dispatch:  # Manual trigger করতে পারবে
 

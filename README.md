@@ -58,7 +58,7 @@ If you want to run this agent automatically, use GitHub Actions.
 
 **Setup Guide:** See [`GITHUB_ACTIONS_SETUP.md`](./GITHUB_ACTIONS_SETUP.md)
 
-**Schedule:** Automatically runs 4 times a day (9 AM, 2 PM, 6 PM, 10 PM Bangladesh Time)
+**Schedule:** Runs every 30 minutes from 7:30 AM to 12:30 AM Bangladesh Time (silenced during sleep hours: 1:00 AM to 7:00 AM BST).
 
 **What happens when you update code?**
 - Whenever you make changes to the code and do `git push`

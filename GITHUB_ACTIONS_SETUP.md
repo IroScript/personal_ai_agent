@@ -54,29 +54,29 @@ git push origin main
 
 ## ⏰ Schedule Details
 
-The workflow will run automatically **4 times a day**:
+The workflow runs automatically **every 30 minutes** from **7:30 AM to 12:30 AM Bangladesh Time (BST)**, and is **completely silenced/disabled during sleep hours (1:00 AM to 7:00 AM BST)** to avoid waking you up.
 
-| Time (UTC) | Bangladesh Time | Purpose |
-|------------|----------------|---------|
-| 3:30 AM | 9:00 AM | Morning planning |
-| 8:30 AM | 2:00 PM | Afternoon check |
-| 12:30 PM | 6:00 PM | Evening review |
-| 4:30 PM | 10:00 PM | Night summary |
-
-### ⏱️ To Adjust Timezone:
+### ⏱️ Current Timezone and Sleep Hours Cron setup:
 
 File: `.github/workflows/productivity-agent.yml`
 
 ```yaml
-- cron: '30 3 * * *'   # 9:00 AM Bangladesh = 3:30 AM UTC
+on:
+  schedule:
+    # 7:30 AM BST (01:30 UTC) - Morning wake-up check
+    - cron: '30 1 * * *'
+    # Every 30 minutes from 8:00 AM BST (02:00 UTC) to 12:30 AM BST (18:30 UTC)
+    - cron: '*/30 2-18 * * *'
 ```
 
-**Formula:** Bangladesh Time - 5:30 = UTC Time
+**Formula:** Bangladesh Time (BST) - 6:00 hours = UTC Time
 
-Example:
-- 9:00 AM BD → 3:30 AM UTC
-- 2:00 PM BD (14:00) → 8:30 AM UTC
-- 6:00 PM BD (18:00) → 12:30 PM UTC
+Example conversions for allowed/prohibited hours:
+- 7:30 AM BST → 1:30 AM UTC (Allowed, morning wake-up run)
+- 8:00 AM BST → 2:00 AM UTC (Allowed, starts interval)
+- 12:30 AM BST → 6:30 PM UTC (18:30 UTC) (Allowed, final interval run)
+- 1:00 AM BST → 7:00 PM UTC (19:00 UTC) (Prohibited, silenced)
+- 7:00 AM BST → 1:00 AM UTC (01:00 UTC) (Prohibited, silenced)
 
 ---
 
