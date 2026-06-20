@@ -71,6 +71,9 @@ on:
 
 **Formula:** Bangladesh Time (BST) - 6:00 hours = UTC Time
 
+> [!NOTE]
+> The GitHub Actions runner timezone is explicitly configured to `Asia/Dhaka` via the global `TZ` environment variable in the workflow file. This ensures that `datetime.now()` inside Python calculations is correctly aligned to Bangladesh Standard Time (BST) and Telegram message timestamps show the correct local time instead of UTC.
+
 Example conversions for allowed/prohibited hours:
 - 7:30 AM BST → 1:30 AM UTC (Allowed, morning wake-up run)
 - 8:00 AM BST → 2:00 AM UTC (Allowed, starts interval)
