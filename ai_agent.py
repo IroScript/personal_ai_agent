@@ -628,6 +628,7 @@ def send_telegram_message(bot_token, chat_id, message):
     """Sends message to Telegram"""
     
     if not bot_token or not chat_id:
+        print("❌ Telegram bot token or chat ID is missing!")
         return False
     
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
@@ -640,8 +641,11 @@ def send_telegram_message(bot_token, chat_id, message):
     
     try:
         response = requests.post(url, data=data, timeout=10)
+        if response.status_code != 200:
+            print(f"❌ Telegram API error: {response.status_code} - {response.text}")
         return response.status_code == 200
-    except:
+    except Exception as e:
+        print(f"❌ Telegram connection exception: {e}")
         return False
 
 
@@ -769,6 +773,18 @@ def ai_nudge_needed(actual_logs, service):
             elapsed_hours = elapsed_seconds / 3600.0
         except Exception as e:
             print(f"⚠️ Error parsing last activity end time: {e}")
+            elapsed_hours = 0.0
+    else:
+        # No logs today yet. Calculate elapsed time since start of tracking day (7:30 AM BST)
+        try:
+            wake_time = now.replace(hour=7, minute=30, second=0, microsecond=0)
+            if now > wake_time:
+                elapsed_seconds = (now - wake_time).total_seconds()
+                elapsed_hours = elapsed_seconds / 3600.0
+            else:
+                elapsed_hours = 0.0
+        except Exception as e:
+            print(f"⚠️ Error calculating time since wake: {e}")
             elapsed_hours = 0.0
             
     print(f"🕒 Current Local Time: {current_time_str}")
@@ -924,3 +940,4 @@ if __name__ == "__main__":
         print("\n" + "="*70)
         print("❌ Analysis Failed")
         print("="*70)
+        sys.exit(1)
