@@ -24,3 +24,15 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Rust build artifacts
+target/
+**/target/
+Cargo.lock
+
+# Runtime SQLite databases and heavy captured data
+data/
+*.db
+*.db-shm
+*.db-wal
+
